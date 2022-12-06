@@ -95,7 +95,10 @@ actor class Swap(
   };
 
   public func getWithdrawEstimate(share:Nat): async {share1:Nat;share2:Nat} {
-    await _getWithdrawEstimate(share)
+    let _this = Principal.fromActor(this);
+    let totalToken1 = await _tokenBalance(token1,_this);
+    let totalToken2 = await _tokenBalance(token2,_this);
+    await _getWithdrawEstimate(share,totalToken1,totalToken2)
   };
 
   public shared({caller}) func swapToken1(amountToken1:Nat): async TxReceipt{
@@ -126,6 +129,14 @@ actor class Swap(
 
   public func getSwapToken2EstimateGivenToken1(amountToken1:Nat): async TxReceipt {
     await _getSwapToken2EstimateGivenToken1(amountToken1)
+  };
+
+  public func getEquivalentToken1Estimate(amountToken2:Nat): async Nat {
+    await _getEquivalentToken1Estimate(amountToken2)
+  };
+
+  public func getEquivalentToken2Estimate(amountToken1:Nat): async Nat {
+    await _getEquivalentToken2Estimate(amountToken1)
   };
 
   ///////////////PRIVATE/////////////////////////
@@ -182,10 +193,10 @@ actor class Swap(
     assert(totalToken1 > 0 and totalToken2 > 0); 
     let shares = _getShares(to);
     assert(shares >= share);
-    let withdrawEstimate = await _getWithdrawEstimate(share);
-    let isValid1 = await _isValid(_this,withdrawEstimate.share1,token1);
-    let isValid2 = await _isValid(_this,withdrawEstimate.share2,token2);
-    assert(isValid1 and isValid2);
+    let withdrawEstimate = await _getWithdrawEstimate(share,totalToken1,totalToken2);
+    assert(withdrawEstimate.share1 > 0 and withdrawEstimate.share2 > 0);
+    assert(totalToken1 > withdrawEstimate.share1);
+    assert(totalToken2 > withdrawEstimate.share2);
     let receipt1 = await _transfer(to,withdrawEstimate.share1,token1);
     switch(receipt1){
       case(#Ok(value)){
@@ -206,12 +217,10 @@ actor class Swap(
     };
   };
 
-  private func _getWithdrawEstimate(share:Nat): async {share1:Nat;share2:Nat} {
+  private func _getWithdrawEstimate(share:Nat,totalToken1:Nat,totalToken2:Nat): async {share1:Nat;share2:Nat} {
     assert(totalShares > 0);
     assert(share <= totalShares);
     let _this = Principal.fromActor(this);
-    let totalToken1 = await _tokenBalance(token1,_this);
-    let totalToken2 = await _tokenBalance(token2,_this);
 
     let share1 = Nat.div(Nat.mul(share,totalToken1),totalShares);
     let share2 = Nat.div(Nat.mul(share,totalToken2),totalShares);
