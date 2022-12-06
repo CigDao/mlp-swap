@@ -21,29 +21,17 @@ import Response "../models/Response";
 import Cycles "mo:base/ExperimentalCycles";
 import Prim "mo:prim";
 import TokenService "../services/TokenService";
-
+import TxReceipt "../models/TxReceipt"
 
 actor class Swap(
     _token1: Principal,
     _token2: Principal,
     ) = this{
 
-  public type TxReceipt = {
-        #Ok: Nat;
-        #Err: {
-            #InsufficientAllowance;
-            #InsufficientBalance;
-            #ErrorOperationStyle;
-            #Unauthorized;
-            #LedgerTrap;
-            #ErrorTo;
-            #Other: Text;
-            #BlockUsed;
-            #ActiveProposal;
-            #AmountTooSmall;
-        };
-    };
 
+  private type TxReceipt = TxReceipt.TxReceipt;
+  
+  private let precision = 100000000;
   private stable var totalShares = 0;
   private stable var token1 = _token1;
   private stable var token2 = _token2;
@@ -87,30 +75,79 @@ actor class Swap(
       Cycles.balance();
   };
 
-  public shared({caller}) func swapToken1(amountToken1:Nat): async {
-    await _swapToken1(caller,amountToken1)
-  };
-
-  public shared({caller}) func swapToken2(amountToken2:Nat): async {
-    await _swapToken2(caller,amountToken2)
-  };
-
-  private func _price(): async Nat {
-    // Algorithmic constant used to determine price (K = totalToken1 * totalToken2)
+  public func price(): async Nat {
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
+    _price(totalToken1,totalToken2);
+  };
+
+  public query func getShares(owner:Principal): async Nat {
+    _getShares(owner)
+  };
+
+  public shared({caller}) func provide(amountToken1:Nat, amountToken2:Nat): async TxReceipt {
+    await _provide(caller,amountToken1, amountToken2)
+  };
+
+  public shared({caller}) func withdraw(share:Nat): async TxReceipt {
+    await _withdraw(caller,share);
+  };
+
+  public func getWithdrawEstimate(share:Nat): async {share1:Nat;share2:Nat} {
+    await _getWithdrawEstimate(share)
+  };
+
+  public shared({caller}) func swapToken1(amountToken1:Nat): async TxReceipt{
+    await _swapToken1(caller,amountToken1)
+  };
+
+  public func getSwapToken1Estimate(amountToken1:Nat): async Nat {
+    let _this = Principal.fromActor(this);
+    let totalToken1 = await _tokenBalance(token1,_this);
+    let totalToken2 = await _tokenBalance(token2,_this);
+    _getSwapToken1Estimate(amountToken1,totalToken1,totalToken2)
+  };
+
+  public func getSwapToken1EstimateGivenToken2(amountToken2:Nat): async TxReceipt {
+    await _getSwapToken1EstimateGivenToken2(amountToken2)
+  };
+
+  public shared({caller}) func swapToken2(amountToken2:Nat): async TxReceipt{
+    await _swapToken2(caller,amountToken2)
+  };
+
+  public func getSwapToken2Estimate(amountToken2:Nat): async Nat {
+    let _this = Principal.fromActor(this);
+    let totalToken1 = await _tokenBalance(token1,_this);
+    let totalToken2 = await _tokenBalance(token2,_this);
+    _getSwapToken2Estimate(amountToken2,totalToken1,totalToken2)
+  };
+
+  public func getSwapToken2EstimateGivenToken1(amountToken1:Nat): async TxReceipt {
+    await _getSwapToken2EstimateGivenToken1(amountToken1)
+  };
+
+  ///////////////PRIVATE/////////////////////////
+
+  private func _price(totalToken1:Nat,totalToken2:Nat): Nat {
+    // Algorithmic constant used to determine price (K = totalToken1 * totalToken2)
+    let _this = Principal.fromActor(this);
     totalToken1 * totalToken2
   };
 
-  private func _provide(from:Principal,amountToken1:Nat, amountToken2:Nat): async () {
+  private func _provide(from:Principal,amountToken1:Nat, amountToken2:Nat): async TxReceipt {
     let _this = Principal.fromActor(this);
     var share:Nat = 0;
     if(totalShares == 0){
-      share := 0;
+      share := 100*precision;
     }else {
       let totalToken1 = await _tokenBalance(token1,_this);
       let totalToken2 = await _tokenBalance(token2,_this);
+      assert(totalToken1 > 0 and totalToken2 > 0); 
+      let isValid1 = await _isValid(from,amountToken1,token1);
+      let isValid2 = await _isValid(from,amountToken2,token2);
+      assert(isValid1 and isValid2);
       let share1 = Nat.div(Nat.mul(totalShares,amountToken1),totalToken1);
       let share2 = Nat.div(Nat.mul(totalShares,amountToken2),totalToken2);
       assert(share1 == share2);
@@ -118,19 +155,59 @@ actor class Swap(
     };
     assert(share > 0);
     let receipt1 = await _transferFrom(from,_this,amountToken1,token1);
-    let receipt2 = await _transferFrom(from,_this,amountToken2,token2);
-    _addShares(from,share)
-
+    switch(receipt1){
+      case(#Ok(value)){
+        let receipt2 = await _transferFrom(from,_this,amountToken2,token2);
+        switch(receipt2){
+          case(#Ok(value)){
+            _addShares(from,share);
+            #Ok(0);
+          };
+          case(#Err(value)){
+            #Err(value)
+          }
+        }
+      };
+      case(#Err(value)){
+        #Err(value)
+      }
+    }
   };
 
   private func _withdraw(to:Principal,share:Nat): async TxReceipt {
+    assert(totalShares > 0);
+    let _this = Principal.fromActor(this);
+    let totalToken1 = await _tokenBalance(token1,_this);
+    let totalToken2 = await _tokenBalance(token2,_this);
+    assert(totalToken1 > 0 and totalToken2 > 0); 
+    let shares = _getShares(to);
+    assert(shares >= share);
     let withdrawEstimate = await _getWithdrawEstimate(share);
-    _removeShares(to,share);
-    ignore await _transfer(to,withdrawEstimate.share1,token1);
-    await _transfer(to,withdrawEstimate.share2,token2);
+    let isValid1 = await _isValid(_this,withdrawEstimate.share1,token1);
+    let isValid2 = await _isValid(_this,withdrawEstimate.share2,token2);
+    assert(isValid1 and isValid2);
+    let receipt1 = await _transfer(to,withdrawEstimate.share1,token1);
+    switch(receipt1){
+      case(#Ok(value)){
+        let receipt2 = await _transfer(to,withdrawEstimate.share2,token2);
+        switch(receipt2){
+          case(#Ok(value)){
+            _removeShares(to,share);
+            #Ok(0)
+          };
+          case(#Err(value)){
+            return #Err(value)
+          };
+        };
+      };
+      case(#Err(value)){
+        return #Err(value)
+      };
+    };
   };
 
-  private func _getWithdrawEstimate(share:Nat): async {share1:Nat;share2:Nat}{
+  private func _getWithdrawEstimate(share:Nat): async {share1:Nat;share2:Nat} {
+    assert(totalShares > 0);
     assert(share <= totalShares);
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
@@ -146,6 +223,7 @@ actor class Swap(
   };
 
   private func _getEquivalentToken1Estimate(amountToken2:Nat): async Nat {
+    assert(totalShares > 0);
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
@@ -153,6 +231,7 @@ actor class Swap(
   };
 
   private func _getEquivalentToken2Estimate(amountToken1:Nat): async Nat {
+    assert(totalShares > 0);
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
@@ -160,14 +239,35 @@ actor class Swap(
 
   };
 
-
-  // Returns the amount of Token2 that the user will get when swapping a given amount of Token1 for Token2
-  private func _getSwapToken1Estimate(amountToken1:Nat): async Nat {
+  // Swaps given amount of Token1 to Token2 using algorithmic price determination
+  private func _swapToken1(from:Principal,amountToken1:Nat): async TxReceipt {
+    assert(totalShares > 0);
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
-    let price = await _price();
+    let amountToken2 = _getSwapToken1Estimate(amountToken1,totalToken1,totalToken2);
+    assert(totalToken2 > 0); 
+    let isValid = await _isValid(from,amountToken1,token1);
+    assert(totalToken2 > amountToken2);
+    assert(isValid);
+    let receipt = await _transferFrom(from,_this,amountToken1,token1);
+    switch(receipt){
+      case(#Ok(value)){
+        await _transfer(from,amountToken2,token2);
+      };
+      case(#Err(value)){
+        #Err(value)
+      }
+    };
 
+  };
+
+  // Returns the amount of Token2 that the user will get when swapping a given amount of Token1 for Token2
+  private func _getSwapToken1Estimate(amountToken1:Nat,totalToken1:Nat, totalToken2:Nat): Nat {
+    assert(totalShares > 0);
+    let _this = Principal.fromActor(this);
+    let price = _price(totalToken1,totalToken2);
+    
     let token1After = Nat.add(totalToken1,amountToken1);
     let token2After = Nat.div(price,token1After);
 
@@ -182,12 +282,13 @@ actor class Swap(
 
   // Returns the amount of Token1 that the user should swap to get _amountToken2 in return
   private func _getSwapToken1EstimateGivenToken2(amountToken2:Nat): async TxReceipt {
+    assert(totalShares > 0);
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
-    let price = await _price();
+    let price = _price(totalToken1,totalToken2);
     if(totalToken2 < amountToken2){
-      return #Err(#InsufficientAllowance);
+      return #Err(#InsufficientPoolBalance);
     };
 
     let token2After = Nat.sub(totalToken2,amountToken2);
@@ -196,21 +297,33 @@ actor class Swap(
     #Ok(amountToken1);
   };
 
-  // Swaps given amount of Token1 to Token2 using algorithmic price determination
-  private func _swapToken1(from:Principal,amountToken1:Nat): async TxReceipt {
-    let _this = Principal.fromActor(this);
-    let amountToken2 = await _getSwapToken1Estimate(amountToken1);
-    ignore await _transferFrom(from,_this,amountToken1,token1);
-    await _transfer(from,amountToken2,token2);
-
-  };
-
-   // Returns the amount of Token2 that the user will get when swapping a given amount of Token1 for Token2
-  private func _getSwapToken2Estimate(amountToken2:Nat): async Nat {
+   // Swaps given amount of Token2 to Token1 using algorithmic price determination
+  private func _swapToken2(from:Principal,amountToken2:Nat): async TxReceipt {
+    assert(totalShares > 0);
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
-    let price = await _price();
+    let amountToken1 = _getSwapToken2Estimate(amountToken2,totalToken1,totalToken2);
+    assert(totalToken1 > 0); 
+    let isValid = await _isValid(from,amountToken2,token2);
+    assert(totalToken1 > amountToken1);
+    assert(isValid);
+    let receipt = await _transferFrom(from,_this,amountToken2,token2);
+    switch(receipt){
+      case(#Ok(value)){
+        await _transfer(from,amountToken1,token1);
+      };
+      case(#Err(value)){
+        #Err(value)
+      }
+    };
+  };
+
+   // Returns the amount of Token2 that the user will get when swapping a given amount of Token1 for Token2
+  private func _getSwapToken2Estimate(amountToken2:Nat,totalToken1:Nat,totalToken2:Nat): Nat {
+    assert(totalShares > 0);
+    let _this = Principal.fromActor(this);
+    let price = _price(totalToken1,totalToken2);
 
     let token2After = Nat.add(totalToken2,amountToken2);
     let token1After = Nat.div(price,token2After);
@@ -225,28 +338,19 @@ actor class Swap(
   };
 
   // Returns the amount of Token2 that the user should swap to get _amountToken1 in return
-  private func _getSwapToken2EstimateGivenToken2(amountToken1:Nat): async TxReceipt {
+  private func _getSwapToken2EstimateGivenToken1(amountToken1:Nat): async TxReceipt {
+    assert(totalShares > 0);
     let _this = Principal.fromActor(this);
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
-    let price = await _price();
     if(totalToken1 < amountToken1){
-      return #Err(#InsufficientAllowance);
+      return #Err(#InsufficientPoolBalance);
     };
-
+    let price = _price(totalToken1,totalToken2);
     let token1After = Nat.sub(totalToken1,amountToken1);
     let token2After = Nat.div(price,token1After);
     let amountToken2 = Nat.sub(token2After,totalToken2);
     #Ok(amountToken2);
-  };
-
-  // Swaps given amount of Token1 to Token1 using algorithmic price determination
-  private func _swapToken2(from:Principal,amountToken2:Nat): async TxReceipt {
-    let _this = Principal.fromActor(this);
-    let amountToken1 = await _getSwapToken2Estimate(amountToken2);
-    ignore await _transferFrom(from,_this,amountToken2,token2);
-    await _transfer(from,amountToken1,token1);
-
   };
 
   private func _transferFrom(from:Principal,to:Principal,amount:Nat,token:Principal): async TxReceipt {
@@ -265,7 +369,7 @@ actor class Swap(
     await TokenService.allowance(owner,_this,canister)
   };
 
-  private func _tokenBalance(owner:Principal,token:Principal): async Nat {
+  private func _tokenBalance(token:Principal,owner:Principal,): async Nat {
     let canister = Principal.toText(token);
     await TokenService.balanceOf(owner,canister)
   };
@@ -298,15 +402,25 @@ actor class Swap(
     };
   };
 
-  private func isValid(amount:Nat, sender:Principal, token:Principal): async Bool {
+  private func _getShares(owner:Principal): Nat {
+    let exist = shares.get(owner);
+    switch(exist){
+      case(?exist){
+        exist
+      };
+      case(null){
+        0
+      };
+    };
+  };
+
+  private func _isValid(sender:Principal, amount:Nat, token:Principal): async Bool {
 
     let _this = Principal.fromActor(this);
     let totalSenderTokens = await _tokenBalance(token,sender);
-    let totalToken1 = await _tokenBalance(token1,_this);
-    let totalToken2 = await _tokenBalance(token2,_this);
     let allowance = await _allowance(sender,token);
 
-    totalToken1 > 0 and totalToken2 > 0 and amount > 0 and totalSenderTokens >= amount and allowance >= amount;
+    amount > 0 and totalSenderTokens >= amount and allowance >= amount;
 
   };
 
