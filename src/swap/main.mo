@@ -262,7 +262,16 @@ actor class Swap(
     let receipt = await _transferFrom(from,_this,amountToken1,token1);
     switch(receipt){
       case(#Ok(value)){
-        await _transfer(from,amountToken2,token2);
+        let receipt2 = await _transfer(from,amountToken2,token2);
+        switch(receipt2){
+          case(#Ok(value)){
+            return #Ok(amountToken2)
+          };
+          case(#Err(value)){
+            return #Err(value)
+          }
+        };
+        #Ok(amountToken2)
       };
       case(#Err(value)){
         #Err(value)
@@ -320,7 +329,15 @@ actor class Swap(
     let receipt = await _transferFrom(from,_this,amountToken2,token2);
     switch(receipt){
       case(#Ok(value)){
-        await _transfer(from,amountToken1,token1);
+        let receipt2 = await _transfer(from,amountToken1,token1);
+        switch(receipt2){
+          case(#Ok(value)){
+            #Ok(amountToken1)
+          };
+          case(#Err(value)){
+            #Err(value)
+          }
+        };
       };
       case(#Err(value)){
         #Err(value)
@@ -343,7 +360,7 @@ actor class Swap(
     if(amountToken1 == totalToken1) {
       amountToken1 := amountToken1 - 1;
     };
-    amountToken2
+    amountToken1
   };
 
   // Returns the amount of Token2 that the user should swap to get _amountToken1 in return
