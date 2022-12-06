@@ -1,0 +1,28 @@
+{
+  "canisters": {
+    "Swap_backend": {
+      "main": "src/Swap_backend/main.mo",
+      "type": "motoko"
+    },
+    "Swap_frontend": {
+      "dependencies": [
+        "Swap_backend"
+      ],
+      "frontend": {
+        "entrypoint": "src/Swap_frontend/src/index.html"
+      },
+      "source": [
+        "src/Swap_frontend/assets",
+        "dist/Swap_frontend/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "version": 1
+}
