@@ -100,4 +100,16 @@ module {
         num;
     };
 
+    public func _metaDataToJson(token1: Text, token2: Text): JSON {
+        let map : HashMap.HashMap<Text, JSON> = HashMap.HashMap<Text, JSON>(
+            0,
+            Text.equal,
+            Text.hash,
+        );
+        map.put("token1", #String(token1));
+        map.put("token2", #String(token2));
+        #Object(map);
+        
+    };
+
 }
