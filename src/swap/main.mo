@@ -327,8 +327,8 @@ actor class Swap(
     let totalToken1 = await _tokenBalance(token1,_this);
     let totalToken2 = await _tokenBalance(token2,_this);
     let amountToken1 = _getSwapToken2Estimate(amountToken2,totalToken1,totalToken2);
-    if(amountToken2 <= slippage){
-      return #Err(#Slippage(amountToken2));
+    if(amountToken1 <= slippage){
+      return #Err(#Slippage(amountToken1));
     };
     assert(totalToken1 > 0); 
     let isValid = await _isValid(from,amountToken2,token2);
@@ -353,7 +353,7 @@ actor class Swap(
     };
   };
 
-   // Returns the amount of Token2 that the user will get when swapping a given amount of Token1 for Token2
+   // Returns the amount of Token1 that the user will get when swapping a given amount of Token2 for Token2
   private func _getSwapToken2Estimate(amountToken2:Nat,totalToken1:Nat,totalToken2:Nat): Nat {
     assert(totalShares > 0);
     let _this = Principal.fromActor(this);
