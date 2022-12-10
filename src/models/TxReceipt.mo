@@ -12,6 +12,7 @@ module {
             #Other: Text;
             #BlockUsed;
             #AmountTooSmall;
+            #Slippage:Nat;
         };
     };
 }
