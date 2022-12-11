@@ -15,11 +15,17 @@ import Int32 "mo:base/Int32";
 import Nat32 "mo:base/Nat32";
 import JSON "../helpers/JSON";
 import Blob "mo:base/Blob";
+import Time "mo:base/Time";
 import Constants "../Constants";
+import Transaction "../models/Transaction";
+import Hex "mo:encoding/Hex";
+import SHA256 "mo:crypto/SHA/SHA256";
+import DatabaseService "../services/DatabaseService"
 
 module {
 
     private type JSON = JSON.JSON;
+    private type Transaction = Transaction.Transaction;
 
     public func natToFloat(value:Nat): Float {
         //var nat64 = Nat64.fromNat(value);
@@ -112,4 +118,65 @@ module {
         
     };
 
+     public func _transactionToJson(transaction: Transaction): JSON {
+        let transactionHashMap : HashMap.HashMap<Text, JSON> = HashMap.HashMap<Text, JSON>(
+            0,
+            Text.equal,
+            Text.hash,
+        );
+        transactionHashMap.put("sender", #String(transaction.sender));
+        transactionHashMap.put("receiver", #String(transaction.receiver));
+        transactionHashMap.put("amount", #Number(transaction.amount));
+        transactionHashMap.put("fee", #Number(transaction.fee));
+        transactionHashMap.put("timeStamp", #Number(transaction.timeStamp));
+        transactionHashMap.put("hash", #String(transaction.hash));
+        transactionHashMap.put("transactionType", #String(transaction.transactionType));
+
+        #Object(transactionHashMap);
+    };
+
+    public func _transactionToHash(transaction: Transaction): Text {
+        let json = _transactionToJson(transaction);
+        let sum256 = SHA256.sum(Blob.toArray(Text.encodeUtf8(JSON.show(json))));
+        Hex.encode(sum256);
+    };
+
+    public func _putTransacton(amount:Int, sender:Text, receiver:Text, tax:Int, transactionType:Text) : async Text {
+        let now = Time.now();
+
+        let _transaction = {
+            sender = sender;
+            receiver = receiver;
+            amount = amount;
+            fee = tax;
+            timeStamp = now;
+            hash = "";
+            transactionType = transactionType;
+        };
+
+        let hash = _transactionToHash(_transaction);
+
+        let transaction = {
+            sender = sender;
+            receiver = receiver;
+            amount = amount;
+            fee = tax;
+            timeStamp = now;
+            hash = hash;
+            transactionType = transactionType;
+        };
+
+        let _canisters = await DatabaseService.canister.getCanistersByPK("group#ledger");
+        let canisters = List.fromArray<Text>(_canisters);
+        let exist = List.last(canisters);
+
+        switch(exist){
+            case(?exist){
+                return await DatabaseService.putTransaction(exist,transaction);
+            };
+            case(null){
+                return "";
+            };
+        };
+    };
 }

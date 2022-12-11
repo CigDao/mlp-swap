@@ -21,7 +21,7 @@ import Response "../models/Response";
 import Cycles "mo:base/ExperimentalCycles";
 import Prim "mo:prim";
 import TokenService "../services/TokenService";
-import TxReceipt "../models/TxReceipt"
+import TxReceipt "../models/TxReceipt";
 
 actor class Swap(
     _token1: Principal,
@@ -144,7 +144,6 @@ actor class Swap(
   };
 
   ///////////////PRIVATE/////////////////////////
-
   private func _price(totalToken1:Nat,totalToken2:Nat): Nat {
     // Algorithmic constant used to determine price (K = totalToken1 * totalToken2)
     let _this = Principal.fromActor(this);
@@ -274,13 +273,14 @@ actor class Swap(
         let receipt2 = await _transfer(from,amountToken2,token2);
         switch(receipt2){
           case(#Ok(value)){
+            let canister = Principal.fromActor(this);
+            let hash = await Utils._putTransacton(amountToken2, Principal.toText(canister), Principal.toText(from), 0, "swap_yc");
             return #Ok(amountToken2)
           };
           case(#Err(value)){
             return #Err(value)
           }
         };
-        #Ok(amountToken2)
       };
       case(#Err(value)){
         #Err(value)
@@ -344,6 +344,8 @@ actor class Swap(
         let receipt2 = await _transfer(from,amountToken1,token1);
         switch(receipt2){
           case(#Ok(value)){
+            let canister = Principal.fromActor(this);
+            let hash = await Utils._putTransacton(amountToken1, Principal.toText(canister), Principal.toText(from), 0, "swap_icp");
             #Ok(amountToken1)
           };
           case(#Err(value)){
