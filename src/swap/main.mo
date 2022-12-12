@@ -39,6 +39,8 @@ actor class Swap(
   private stable var shareEntries : [(Principal,Nat)] = [];
   private var shares = HashMap.fromIter<Principal,Nat>(shareEntries.vals(), 0, Principal.equal, Principal.hash);
 
+  var log = "";
+
   system func preupgrade() {
     shareEntries := Iter.toArray(shares.entries());
   };
@@ -271,16 +273,16 @@ actor class Swap(
     switch(receipt){
       case(#Ok(value)){
         let receipt2 = await _transfer(from,amountToken2,token2);
-        switch(receipt2){
-          case(#Ok(value)){
-            let canister = Principal.fromActor(this);
-            let hash = await Utils._putTransacton(amountToken2, Principal.toText(canister), Principal.toText(from), 0, "swap_yc");
-            return #Ok(amountToken2)
+          switch(receipt2){
+            case(#Ok(value)){
+              let canister = Principal.fromActor(this);
+              ignore Utils._putTransacton(amountToken2, Principal.toText(canister), Principal.toText(from), 0, "swap_yc");
+              return #Ok(amountToken2)
+            };
+            case(#Err(value)){
+              return #Err(value)
+            }
           };
-          case(#Err(value)){
-            return #Err(value)
-          }
-        };
       };
       case(#Err(value)){
         #Err(value)
@@ -345,7 +347,7 @@ actor class Swap(
         switch(receipt2){
           case(#Ok(value)){
             let canister = Principal.fromActor(this);
-            let hash = await Utils._putTransacton(amountToken1, Principal.toText(canister), Principal.toText(from), 0, "swap_icp");
+            ignore Utils._putTransacton(amountToken1, Principal.toText(canister), Principal.toText(from), 0, "swap_icp");
             #Ok(amountToken1)
           };
           case(#Err(value)){
@@ -470,6 +472,7 @@ actor class Swap(
         if (path.size() == 1) {
             switch (path[0]) {
                 case ("getMetaData") return _getMetaDataResponse();
+                case ("log") return _textResponse(log);
                 case (_) return return Http.BAD_REQUEST();
             };
         }else {
@@ -484,6 +487,17 @@ actor class Swap(
             status_code        = 200;
             headers            = [("Content-Type", "application/json")];
             body               = blob;
+            streaming_strategy = null;
+        };
+    };
+
+    private func _textResponse(value : Text) : Http.Response {
+        let json = #String(value);
+        let blob = Text.encodeUtf8(JSON.show(json));
+        let response : Http.Response = {
+            status_code = 200;
+            headers = [("Content-Type", "application/json")];
+            body = blob;
             streaming_strategy = null;
         };
     };
