@@ -89,14 +89,10 @@ actor class Swap(
   };
 
   public shared({caller}) func provide(amountToken1:Nat, amountToken2:Nat): async TxReceipt {
-    let cigDaoWallet = Principal.fromText("ffwmr-s7bzs-imhk6-t7z4t-zxyyq-bjcm4-4qb2o-wgh7b-p3mrb-eoyde-aae");
-    assert(caller == cigDaoWallet);
     await _provide(caller,amountToken1, amountToken2)
   };
 
   public shared({caller}) func withdraw(share:Nat): async TxReceipt {
-    let cigDaoWallet = Principal.fromText("ffwmr-s7bzs-imhk6-t7z4t-zxyyq-bjcm4-4qb2o-wgh7b-p3mrb-eoyde-aae");
-    assert(caller == cigDaoWallet);
     await _withdraw(caller,share);
   };
 
