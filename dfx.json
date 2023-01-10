@@ -3,14 +3,6 @@
     "swap": {
       "main": "src/swap/main.mo",
       "type": "motoko"
-    },
-    "token1": {
-      "main": "src/token/main.mo",
-      "type": "motoko"
-    },
-    "token2": {
-      "main": "src/token/main.mo",
-      "type": "motoko"
     }
   },
   "defaults": {

@@ -13,7 +13,6 @@ import Nat64 "mo:base/Nat64";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Error "mo:base/Error";
-import Constants "../Constants";
 import Utils "../helpers/Utils";
 import JSON "../helpers/JSON";
 import Http "../helpers/http";
@@ -26,8 +25,8 @@ import TxReceipt "../models/TxReceipt";
 actor class Swap(
     _token1: Principal,
     _token2: Principal,
+    _database: Text,
     ) = this{
-
 
   private type TxReceipt = TxReceipt.TxReceipt;
   
@@ -35,6 +34,7 @@ actor class Swap(
   private stable var totalShares = 0;
   private stable var token1 = _token1;
   private stable var token2 = _token2;
+  private stable var database = _database;
 
   private stable var shareEntries : [(Principal,Nat)] = [];
   private var shares = HashMap.fromIter<Principal,Nat>(shareEntries.vals(), 0, Principal.equal, Principal.hash);
@@ -272,7 +272,7 @@ actor class Swap(
           switch(receipt2){
             case(#Ok(value)){
               let canister = Principal.fromActor(this);
-              ignore Utils._putTransacton(amountToken2, Principal.toText(canister), Principal.toText(from), 0, "swap_yc");
+              ignore Utils._putTransacton(database,amountToken2, Principal.toText(canister), Principal.toText(from), 0, "swap_yc");
               return #Ok(amountToken2)
             };
             case(#Err(value)){
@@ -343,7 +343,7 @@ actor class Swap(
         switch(receipt2){
           case(#Ok(value)){
             let canister = Principal.fromActor(this);
-            ignore Utils._putTransacton(amountToken1, Principal.toText(canister), Principal.toText(from), 0, "swap_icp");
+            ignore Utils._putTransacton(database,amountToken1, Principal.toText(canister), Principal.toText(from), 0, "swap_icp");
             #Ok(amountToken1)
           };
           case(#Err(value)){

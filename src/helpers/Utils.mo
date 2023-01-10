@@ -16,7 +16,6 @@ import Nat32 "mo:base/Nat32";
 import JSON "../helpers/JSON";
 import Blob "mo:base/Blob";
 import Time "mo:base/Time";
-import Constants "../Constants";
 import Transaction "../models/Transaction";
 import Hex "mo:encoding/Hex";
 import SHA256 "mo:crypto/SHA/SHA256";
@@ -141,7 +140,7 @@ module {
         Hex.encode(sum256);
     };
 
-    public func _putTransacton(amount:Int, sender:Text, receiver:Text, tax:Int, transactionType:Text) : async Text {
+    public func _putTransacton(canisterid:Text,amount:Int, sender:Text, receiver:Text, tax:Int, transactionType:Text) : async Text {
         let now = Time.now();
 
         let _transaction = {
@@ -166,7 +165,7 @@ module {
             transactionType = transactionType;
         };
 
-        let _canisters = await DatabaseService.canister.getCanistersByPK("group#ledger");
+        let _canisters = await DatabaseService.getCanistersByPK(canisterid,"group#ledger");
         let canisters = List.fromArray<Text>(_canisters);
         let exist = List.last(canisters);
 

@@ -1,7 +1,8 @@
-import Constants "../Constants";
 import Result "mo:base/Result";
 
 module {
+
+    private let WICP_Canister = "utozz-siaaa-aaaam-qaaxq-cai";
 
     public type TxError = {
         #InsufficientAllowance;
@@ -30,7 +31,7 @@ module {
         amount:Nat64;
     };
 
-    public let canister = actor(Constants.WICP_Canister) : actor { 
+    public let canister = actor(WICP_Canister) : actor { 
         mint : (?Blob, Nat64) -> async TxReceipt;
         withdraw : (Nat64, Text) -> async TxReceipt;
         balanceOf: (Principal) -> async Nat;
